@@ -225,13 +225,91 @@ namespace PSVR2Toolkit.CAPI {
             return etData;
         }
 
-        public void DoTriggerStuff() {
+        public void TriggerEffectDisable(EVRControllerType controllerType) {
             if ( !m_running ) {
                 return;
             }
 
-            // TODO
-            SendIpcCommand(ECommandType.ClientTriggerEffectOff);
+            CommandDataClientTriggerEffectOff effectOff = new CommandDataClientTriggerEffectOff() {
+                controllerType = controllerType
+            };
+            SendIpcCommand(ECommandType.ClientTriggerEffectOff, effectOff);
+        }
+
+        public void TriggerEffectFeedback(EVRControllerType controllerType, byte position, byte strength) {
+            if ( !m_running ) {
+                return;
+            }
+
+            CommandDataClientTriggerEffectFeedback effectFeedback = new CommandDataClientTriggerEffectFeedback() {
+                controllerType = controllerType,
+                position = position,
+                strength = strength,
+            };
+            SendIpcCommand(ECommandType.ClientTriggerEffectFeedback, effectFeedback);
+        }
+        public void TriggerEffectWeapon(EVRControllerType controllerType, byte startPosition, byte endPosition, byte strength) {
+            if ( !m_running ) {
+                return;
+            }
+
+            CommandDataClientTriggerEffectWeapon effectWeapon = new CommandDataClientTriggerEffectWeapon() {
+                controllerType = controllerType,
+                startPosition = startPosition,
+                endPosition = endPosition,
+                strength = strength,
+            };
+            SendIpcCommand(ECommandType.ClientTriggerEffectWeapon, effectWeapon);
+        }
+        public void TriggerEffectVibration(EVRControllerType controllerType, byte position, byte amplitude, byte frequency) {
+            if ( !m_running ) {
+                return;
+            }
+
+            CommandDataClientTriggerEffectVibration effectVibration = new CommandDataClientTriggerEffectVibration() {
+                controllerType = controllerType,
+                position = position,
+                amplitude = amplitude,
+                frequency = frequency,
+            };
+            SendIpcCommand(ECommandType.ClientTriggerEffectVibration, effectVibration);
+        }
+        public void TriggerEffectMultiplePositionFeedback(EVRControllerType controllerType, byte[] strength) {
+            if ( !m_running ) {
+                return;
+            }
+
+            CommandDataClientTriggerEffectMultiplePositionFeedback effectVibration = new CommandDataClientTriggerEffectMultiplePositionFeedback() {
+                controllerType = controllerType,
+                strength = strength,
+            };
+            SendIpcCommand(ECommandType.ClientTriggerEffectMultiplePositionFeedback, effectVibration);
+        }
+        public void TriggerEffectSlopeFeedback(EVRControllerType controllerType, byte startPosition, byte endPosition, byte startStrength, byte endStrength) {
+            if ( !m_running ) {
+                return;
+            }
+
+            CommandDataClientTriggerEffectSlopeFeedback effectVibration = new CommandDataClientTriggerEffectSlopeFeedback() {
+                controllerType = controllerType,
+                startPosition = startPosition,
+                endPosition = endPosition,
+                startStrength = startStrength,
+                endStrength = endStrength,
+            };
+            SendIpcCommand(ECommandType.ClientTriggerEffectSlopeFeedback, effectVibration);
+        }
+        public void TriggerEffectMultiplePositionVibration(EVRControllerType controllerType, byte frequency, byte[] amplitude) {
+            if ( !m_running ) {
+                return;
+            }
+
+            CommandDataClientTriggerEffectMultiplePositionVibration effectVibration = new CommandDataClientTriggerEffectMultiplePositionVibration() {
+                controllerType = controllerType,
+                frequency = frequency,
+                amplitude = amplitude,
+            };
+            SendIpcCommand(ECommandType.ClientTriggerEffectMultiplePositionVibration, effectVibration);
         }
     }
 }
