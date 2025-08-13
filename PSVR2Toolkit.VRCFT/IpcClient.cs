@@ -1,0 +1,237 @@
+﻿using System;
+using System.Diagnostics;
+using System.Net.Sockets;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace PSVR2Toolkit.CAPI {
+    public class IpcClient {
+        private const ushort IPC_SERVER_PORT = 3364;
+        private const ushort k_unIpcVersion = 1;
+
+        private static IpcClient m_pInstance;
+
+        private bool m_running = false;
+        private TcpClient m_client;
+        private NetworkStream m_stream;
+        private Thread m_receiveThread;
+
+        private readonly object m_gazeStateLock = new object();
+        private TaskCompletionSource<CommandDataServerGazeDataResult> m_gazeTask;
+
+        public static IpcClient Instance() {
+            if ( m_pInstance == null ) {
+                m_pInstance = new IpcClient();
+            }
+            return m_pInstance;
+        }
+        public bool Start() {
+            if ( m_running ) {
+                return false;
+            }
+
+            try {
+                m_client = new TcpClient();
+                m_client.Connect("127.0.0.1", IPC_SERVER_PORT);
+                m_stream = m_client.GetStream();
+
+                m_running = true;
+                m_receiveThread = new Thread(ReceiveLoop);
+                m_receiveThread.Start();
+                return true;
+            } catch ( SocketException ex ) {
+                Console.WriteLine($"[IPC_CLIENT] Connection failed. LastError = {ex.SocketErrorCode}");
+                return false;
+            }
+        }
+
+        public void Stop() {
+            if ( !m_running ) {
+                return;
+            }
+
+            m_running = false;
+            m_stream.Close();
+            m_client.Close();
+            m_receiveThread.Join();
+        }
+
+        private void ReceiveLoop() {
+            byte[] buffer = new byte[1024];
+
+            try {
+                CommandDataClientRequestHandshake clientHandshakeRequest = new CommandDataClientRequestHandshake() {
+                    ipcVersion = k_unIpcVersion,
+                    processId = ( uint ) Process.GetCurrentProcess().Id
+                };
+                SendIpcCommand(ECommandType.ClientRequestHandshake, clientHandshakeRequest);
+
+                while ( m_running ) {
+                    int bytesRead = m_stream.Read(buffer, 0, buffer.Length);
+                    if ( bytesRead <= 0 ) {
+                        Console.WriteLine("[IPC_CLIENT] Disconnected from server.");
+                        break;
+                    }
+
+                    if ( bytesRead < Marshal.SizeOf<CommandHeader>() ) {
+                        Console.WriteLine("[IPC_CLIENT] Received invalid command header size.");
+                        continue;
+                    }
+
+                    HandleIpcCommand(buffer, bytesRead);
+                }
+            } catch ( Exception ex ) {
+                if ( m_running ) {
+                    Console.WriteLine($"[IPC_CLIENT] Error in receive loop: {ex.Message}");
+                }
+            }
+        }
+
+        private void HandleIpcCommand(byte[] pBuffer, int bytesReceived) {
+            CommandHeader header = ByteArrayToStructure<CommandHeader>(pBuffer, 0);
+
+            switch ( header.type ) {
+                case ECommandType.ServerPong: {
+                        Console.WriteLine("[IPC_CLIENT] Received Pong from server.");
+                        break;
+                    }
+
+                case ECommandType.ServerHandshakeResult: {
+                        if ( header.dataLen == Marshal.SizeOf<CommandDataServerHandshakeResult>() ) {
+                            CommandDataServerHandshakeResult response = ByteArrayToStructure<CommandDataServerHandshakeResult>(pBuffer, Marshal.SizeOf<CommandHeader>());
+                            switch ( response.result ) {
+                                case EHandshakeResult.Success: {
+                                        Console.WriteLine("[IPC_CLIENT] Handshake successful!");
+                                        break;
+                                    }
+                                case EHandshakeResult.Failed: {
+                                        Console.WriteLine("[IPC_CLIENT] Handshake failed!");
+                                        break;
+                                    }
+                                case EHandshakeResult.Outdated: {
+                                        Console.WriteLine($"[IPC_CLIENT] Handshake failed with reason: Outdated client. Please upgrade to an IPC version of {response.ipcVersion}");
+                                        break;
+                                    }
+                            }
+                        }
+                        break;
+                    }
+                case ECommandType.ServerGazeDataResult: {
+                        if ( header.dataLen == Marshal.SizeOf<CommandDataServerGazeDataResult>() ) {
+                            CommandDataServerGazeDataResult response = ByteArrayToStructure<CommandDataServerGazeDataResult>(pBuffer, Marshal.SizeOf<CommandHeader>());
+                            lock ( m_gazeStateLock ) {
+                                if ( m_gazeTask != null ) {
+                                    m_gazeTask.SetResult(response);
+                                    m_gazeTask = null;
+                                } else {
+                                    Console.WriteLine("[IPC_CLIENT] Received unsolicited eye tracking data.");
+                                }
+                            }
+
+                        }
+                        break;
+                    }
+            }
+        }
+
+        private void SendIpcCommand<T>(ECommandType type, T data = default) where T : struct {
+            if ( !m_running )
+                return;
+
+            int dataLen = data.Equals(default(T)) ? 0 : Marshal.SizeOf<T>();
+            int bufferLen = Marshal.SizeOf<CommandHeader>() + dataLen;
+            byte[] buffer = new byte[bufferLen];
+
+            CommandHeader header = new CommandHeader
+            {
+                type = type,
+                dataLen = dataLen
+            };
+
+            IntPtr headerPtr = Marshal.AllocHGlobal(Marshal.SizeOf<CommandHeader>());
+            Marshal.StructureToPtr(header, headerPtr, false);
+            Marshal.Copy(headerPtr, buffer, 0, Marshal.SizeOf<CommandHeader>());
+            Marshal.FreeHGlobal(headerPtr);
+
+            if ( dataLen > 0 ) {
+                IntPtr dataPtr = Marshal.AllocHGlobal(dataLen);
+                Marshal.StructureToPtr(data, dataPtr, false);
+                Marshal.Copy(dataPtr, buffer, Marshal.SizeOf<CommandHeader>(), dataLen);
+                Marshal.FreeHGlobal(dataPtr);
+            }
+
+            m_stream.Write(buffer, 0, buffer.Length);
+        }
+
+        // no data
+        private void SendIpcCommand(ECommandType type) {
+            if ( !m_running )
+                return;
+
+            int bufferLen = Marshal.SizeOf<CommandHeader>();
+            byte[] buffer = new byte[bufferLen];
+
+            CommandHeader header = new CommandHeader
+            {
+                type = type,
+                dataLen = 0
+            };
+
+            IntPtr headerPtr = Marshal.AllocHGlobal(Marshal.SizeOf<CommandHeader>());
+            Marshal.StructureToPtr(header, headerPtr, false);
+            Marshal.Copy(headerPtr, buffer, 0, Marshal.SizeOf<CommandHeader>());
+            Marshal.FreeHGlobal(headerPtr);
+
+            m_stream.Write(buffer, 0, buffer.Length);
+        }
+
+        private T ByteArrayToStructure<T>(byte[] bytes, int offset) where T : struct {
+            int size = Marshal.SizeOf<T>();
+            if ( size > bytes.Length - offset ) {
+                throw new ArgumentException("Byte array is too small to contain the structure.");
+            }
+
+            IntPtr ptr = Marshal.AllocHGlobal(size);
+            Marshal.Copy(bytes, offset, ptr, size);
+            T structure = (T)Marshal.PtrToStructure(ptr, typeof(T));
+            Marshal.FreeHGlobal(ptr);
+
+            return structure;
+        }
+
+        public async Task<Psvr2EyeTrackingData> RequestEyeTrackingData() {
+            Psvr2EyeTrackingData etData = new Psvr2EyeTrackingData();
+
+            if ( !m_running ) {
+                return etData;
+            }
+
+            TaskCompletionSource<CommandDataServerGazeDataResult> gazeTask;
+
+
+            lock ( m_gazeStateLock ) {
+                gazeTask = new TaskCompletionSource<CommandDataServerGazeDataResult>();
+                m_gazeTask = gazeTask;
+            }
+
+            SendIpcCommand(ECommandType.ClientRequestGazeData);
+
+            CommandDataServerGazeDataResult responseData = await gazeTask.Task;
+
+            // TODO: Copy data
+            // etData = m_serverGazeState;
+
+            return etData;
+        }
+
+        public void DoTriggerStuff() {
+            if ( !m_running ) {
+                return;
+            }
+
+            // TODO
+            SendIpcCommand(ECommandType.ClientTriggerEffectOff);
+        }
+    }
+}

@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.8.36227.8
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PSVR2Toolkit.VRCFT", "PSVR2Toolkit.VRCFT.csproj", "{ADD1A9E1-BC17-4ED2-8401-52E7965C169B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{ADD1A9E1-BC17-4ED2-8401-52E7965C169B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ADD1A9E1-BC17-4ED2-8401-52E7965C169B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ADD1A9E1-BC17-4ED2-8401-52E7965C169B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ADD1A9E1-BC17-4ED2-8401-52E7965C169B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {D7326FF3-69A8-473F-8F76-C8FCE9799F6F}
+	EndGlobalSection
+EndGlobal
