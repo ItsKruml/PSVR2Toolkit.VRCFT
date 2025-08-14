@@ -43,34 +43,34 @@ namespace PSVR2Toolkit.VRCFT {
             if ( Status == ModuleState.Active ) {
                 var eyeTrackingData = Task.Run(() => IpcClient.Instance().RequestEyeTrackingData()).GetAwaiter().GetResult();
 
-                if ( eyeTrackingData.left.blinkValid ) {
-                    float leftOpenness = eyeTrackingData.left.isBlinking ? 0 : 1;
+                if ( eyeTrackingData.leftEye.isBlinkValid ) {
+                    float leftOpenness = eyeTrackingData.leftEye.blink ? 0 : 1;
                     if ( m_leftEyeOpenLowPass != null ) {
                         leftOpenness = m_leftEyeOpenLowPass.FilterValue(leftOpenness);
                     }
                     UnifiedTracking.Data.Eye.Left.Openness = leftOpenness;
                 }
-                if ( eyeTrackingData.right.blinkValid ) {
-                    float rightOpenness = eyeTrackingData.right.isBlinking ? 0 : 1;
+                if ( eyeTrackingData.rightEye.isBlinkValid ) {
+                    float rightOpenness = eyeTrackingData.rightEye.blink ? 0 : 1;
                     if ( m_rightEyeOpenLowPass != null ) {
                         rightOpenness = m_rightEyeOpenLowPass.FilterValue(rightOpenness);
                     }
                     UnifiedTracking.Data.Eye.Right.Openness = rightOpenness;
                 }
 
-                if ( eyeTrackingData.left.gazeValid ) {
-                    UnifiedTracking.Data.Eye.Left.Gaze = new VRCFT_Vector2(eyeTrackingData.left.gaze.x, eyeTrackingData.left.gaze.y).FlipXCoordinates();
+                if ( eyeTrackingData.leftEye.isGazeDirValid ) {
+                    UnifiedTracking.Data.Eye.Left.Gaze = new VRCFT_Vector2(eyeTrackingData.leftEye.gazeDirNorm.x, eyeTrackingData.leftEye.gazeDirNorm.y).FlipXCoordinates();
                 }
-                if ( eyeTrackingData.right.gazeValid ) {
-                    UnifiedTracking.Data.Eye.Right.Gaze = new VRCFT_Vector2(eyeTrackingData.right.gaze.x, eyeTrackingData.right.gaze.y).FlipXCoordinates();
+                if ( eyeTrackingData.rightEye.isGazeDirValid ) {
+                    UnifiedTracking.Data.Eye.Right.Gaze = new VRCFT_Vector2(eyeTrackingData.rightEye.gazeDirNorm.x, eyeTrackingData.rightEye.gazeDirNorm.y).FlipXCoordinates();
                 }
 
                 // pupil dilation
-                if ( eyeTrackingData.left.dilationValid ) {
-                    UnifiedTracking.Data.Eye.Left.PupilDiameter_MM = eyeTrackingData.left.dilation;
+                if ( eyeTrackingData.leftEye.isPupilDiaValid ) {
+                    UnifiedTracking.Data.Eye.Left.PupilDiameter_MM = eyeTrackingData.leftEye.pupilDiaMm;
                 }
-                if ( eyeTrackingData.right.dilationValid ) {
-                    UnifiedTracking.Data.Eye.Right.PupilDiameter_MM = eyeTrackingData.right.dilation;
+                if ( eyeTrackingData.rightEye.isPupilDiaValid ) {
+                    UnifiedTracking.Data.Eye.Right.PupilDiameter_MM = eyeTrackingData.rightEye.pupilDiaMm;
                 }
 
                 // Force the normalization values of Dilation to fit avg. pupil values.

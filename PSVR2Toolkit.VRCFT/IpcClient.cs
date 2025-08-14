@@ -200,11 +200,10 @@ namespace PSVR2Toolkit.CAPI {
             return structure;
         }
 
-        public async Task<Psvr2EyeTrackingData> RequestEyeTrackingData() {
-            Psvr2EyeTrackingData etData = new Psvr2EyeTrackingData();
+        public async Task<CommandDataServerGazeDataResult> RequestEyeTrackingData() {
 
             if ( !m_running ) {
-                return etData;
+                return new CommandDataServerGazeDataResult();
             }
 
             TaskCompletionSource<CommandDataServerGazeDataResult> gazeTask;
@@ -218,11 +217,7 @@ namespace PSVR2Toolkit.CAPI {
             SendIpcCommand(ECommandType.ClientRequestGazeData);
 
             CommandDataServerGazeDataResult responseData = await gazeTask.Task;
-
-            // TODO: Copy data
-            // etData = m_serverGazeState;
-
-            return etData;
+            return responseData;
         }
 
         public void TriggerEffectDisable(EVRControllerType controllerType) {

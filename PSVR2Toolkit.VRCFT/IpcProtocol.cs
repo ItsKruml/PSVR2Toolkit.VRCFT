@@ -1,29 +1,5 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace PSVR2Toolkit {
-    public struct Vector3 {
-        public float x, y, z;
-    }
-    public struct Quaternion {
-        public float w, x, y, z;
-    }
-
-    public struct Psvr2Eye {
-        public Vector3 gaze;
-        public bool gazeValid;
-        public bool isBlinking;
-        public bool blinkValid;
-        public float dilation;
-        public bool dilationValid;
-        public bool valid;
-    }
-
-    public struct Psvr2EyeTrackingData {
-        public Psvr2Eye left;
-        public Psvr2Eye right;
-    }
-}
-
 namespace PSVR2Toolkit.CAPI {
     public enum ECommandType : ushort {
         ClientPing, // No command data.
@@ -69,8 +45,29 @@ namespace PSVR2Toolkit.CAPI {
     };
 
     [StructLayout(LayoutKind.Sequential)]
+    public struct GazeVector3 {
+        public float x, y, z;
+    };
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct GazeEyeResult {
+        public bool isGazeOriginValid;
+        public GazeVector3 gazeOriginMm;
+
+        public bool isGazeDirValid;
+        public GazeVector3 gazeDirNorm;
+
+        public bool isPupilDiaValid;
+        public float pupilDiaMm;
+
+        public bool isBlinkValid;
+        public bool blink;
+    };
+
+    [StructLayout(LayoutKind.Sequential)]
     public struct CommandDataServerGazeDataResult {
-        // TODO
+        public GazeEyeResult leftEye;
+        public GazeEyeResult rightEye;
     };
 
     [StructLayout(LayoutKind.Sequential)]
