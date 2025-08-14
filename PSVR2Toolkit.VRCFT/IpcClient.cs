@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using System;
 using System.Diagnostics;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
@@ -13,18 +14,23 @@ namespace PSVR2Toolkit.CAPI {
         private static IpcClient m_pInstance;
 
         private bool m_running = false;
-        private TcpClient m_client;
-        private NetworkStream m_stream;
-        private Thread m_receiveThread;
+        private TcpClient? m_client;
+        private NetworkStream? m_stream;
+        private Thread? m_receiveThread;
 
         private readonly object m_gazeStateLock = new object();
-        private TaskCompletionSource<CommandDataServerGazeDataResult> m_gazeTask;
+        private TaskCompletionSource<CommandDataServerGazeDataResult>? m_gazeTask;
+        private CancellationTokenSource m_forceShutdownToken;
+        private ILogger m_logger;
 
         public static IpcClient Instance() {
             if ( m_pInstance == null ) {
                 m_pInstance = new IpcClient();
             }
             return m_pInstance;
+        }
+        public void SetLogger(ILogger logger) {
+            m_logger = logger;
         }
         public bool Start() {
             if ( m_running ) {
@@ -34,14 +40,18 @@ namespace PSVR2Toolkit.CAPI {
             try {
                 m_client = new TcpClient();
                 m_client.Connect("127.0.0.1", IPC_SERVER_PORT);
-                m_stream = m_client.GetStream();
+                if ( m_client.Connected ) {
+                    m_stream = m_client.GetStream();
 
-                m_running = true;
-                m_receiveThread = new Thread(ReceiveLoop);
-                m_receiveThread.Start();
-                return true;
+                    m_running = true;
+                    m_forceShutdownToken = new CancellationTokenSource();
+                    m_receiveThread = new Thread(() => ReceiveLoop(m_forceShutdownToken.Token));
+                    m_receiveThread.Start();
+                    return true;
+                }
+                return false;
             } catch ( SocketException ex ) {
-                Console.WriteLine($"[IPC_CLIENT] Connection failed. LastError = {ex.SocketErrorCode}");
+                m_logger.LogCritical($"[IPC_CLIENT] Connection failed. LastError = {ex.SocketErrorCode}");
                 return false;
             }
         }
@@ -52,12 +62,30 @@ namespace PSVR2Toolkit.CAPI {
             }
 
             m_running = false;
-            m_stream.Close();
-            m_client.Close();
-            m_receiveThread.Join();
+            m_forceShutdownToken.Cancel();
+
+            lock ( m_gazeStateLock ) {
+                m_gazeTask?.TrySetCanceled();
+                m_gazeTask = null;
+            }
+
+            try {
+                m_stream?.Close();
+                m_client?.Close();
+            } catch { }
+
+            if ( m_receiveThread != null && m_receiveThread.IsAlive ) {
+                if ( !m_receiveThread.Join(2000) ) {
+                    m_receiveThread.Interrupt();
+                }
+            }
+
+            m_stream?.Dispose();
+            m_client?.Dispose();
+            m_forceShutdownToken.Dispose();
         }
 
-        private void ReceiveLoop() {
+        private void ReceiveLoop(CancellationToken token) {
             byte[] buffer = new byte[1024];
 
             try {
@@ -67,23 +95,30 @@ namespace PSVR2Toolkit.CAPI {
                 };
                 SendIpcCommand(ECommandType.ClientRequestHandshake, clientHandshakeRequest);
 
-                while ( m_running ) {
-                    int bytesRead = m_stream.Read(buffer, 0, buffer.Length);
+                while ( m_running && !token.IsCancellationRequested ) {
+                    if ( !m_stream.CanRead )
+                        break;
+
+                    var readTask = m_stream.ReadAsync(buffer, 0, buffer.Length, token);
+                    int bytesRead = readTask.GetAwaiter().GetResult();
+
                     if ( bytesRead <= 0 ) {
-                        Console.WriteLine("[IPC_CLIENT] Disconnected from server.");
+                        m_logger.LogWarning("[IPC_CLIENT] Disconnected from server.");
                         break;
                     }
 
                     if ( bytesRead < Marshal.SizeOf<CommandHeader>() ) {
-                        Console.WriteLine("[IPC_CLIENT] Received invalid command header size.");
+                        m_logger.LogWarning("[IPC_CLIENT] Received invalid command header size.");
                         continue;
                     }
 
                     HandleIpcCommand(buffer, bytesRead);
                 }
+            } catch ( OperationCanceledException ) {
+                // nothing special, this is from shutdown most likely
             } catch ( Exception ex ) {
                 if ( m_running ) {
-                    Console.WriteLine($"[IPC_CLIENT] Error in receive loop: {ex.Message}");
+                    m_logger.LogWarning($"[IPC_CLIENT] Error in receive loop: {ex.Message}");
                 }
             }
         }
@@ -93,7 +128,7 @@ namespace PSVR2Toolkit.CAPI {
 
             switch ( header.type ) {
                 case ECommandType.ServerPong: {
-                        Console.WriteLine("[IPC_CLIENT] Received Pong from server.");
+                        m_logger.LogInformation("[IPC_CLIENT] Received Pong from server.");
                         break;
                     }
 
@@ -102,15 +137,15 @@ namespace PSVR2Toolkit.CAPI {
                             CommandDataServerHandshakeResult response = ByteArrayToStructure<CommandDataServerHandshakeResult>(pBuffer, Marshal.SizeOf<CommandHeader>());
                             switch ( response.result ) {
                                 case EHandshakeResult.Success: {
-                                        Console.WriteLine("[IPC_CLIENT] Handshake successful!");
+                                        m_logger.LogInformation("[IPC_CLIENT] Handshake successful!");
                                         break;
                                     }
                                 case EHandshakeResult.Failed: {
-                                        Console.WriteLine("[IPC_CLIENT] Handshake failed!");
+                                        m_logger.LogError("[IPC_CLIENT] Handshake failed!");
                                         break;
                                     }
                                 case EHandshakeResult.Outdated: {
-                                        Console.WriteLine($"[IPC_CLIENT] Handshake failed with reason: Outdated client. Please upgrade to an IPC version of {response.ipcVersion}");
+                                        m_logger.LogError($"[IPC_CLIENT] Handshake failed with reason: Outdated client. Please upgrade to an IPC version of {response.ipcVersion}");
                                         break;
                                     }
                             }
@@ -125,7 +160,7 @@ namespace PSVR2Toolkit.CAPI {
                                     m_gazeTask.SetResult(response);
                                     m_gazeTask = null;
                                 } else {
-                                    Console.WriteLine("[IPC_CLIENT] Received unsolicited eye tracking data.");
+                                    m_logger.LogError("[IPC_CLIENT] Received unsolicited eye tracking data.");
                                 }
                             }
 
@@ -200,7 +235,7 @@ namespace PSVR2Toolkit.CAPI {
             return structure;
         }
 
-        public async Task<CommandDataServerGazeDataResult> RequestEyeTrackingData() {
+        public CommandDataServerGazeDataResult RequestEyeTrackingData(int timeoutMs = 20) {
 
             if ( !m_running ) {
                 return new CommandDataServerGazeDataResult();
@@ -208,16 +243,24 @@ namespace PSVR2Toolkit.CAPI {
 
             TaskCompletionSource<CommandDataServerGazeDataResult> gazeTask;
 
-
             lock ( m_gazeStateLock ) {
-                gazeTask = new TaskCompletionSource<CommandDataServerGazeDataResult>();
+                m_gazeTask?.TrySetCanceled();
+                gazeTask = new TaskCompletionSource<CommandDataServerGazeDataResult>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
                 m_gazeTask = gazeTask;
             }
 
             SendIpcCommand(ECommandType.ClientRequestGazeData);
 
-            CommandDataServerGazeDataResult responseData = await gazeTask.Task;
-            return responseData;
+            if ( gazeTask.Task.Wait(timeoutMs) ) {
+                return gazeTask.Task.Result;
+            } else {
+                m_logger.LogWarning("[IPC_CLIENT] Eye tracking request timed out.");
+                lock ( m_gazeStateLock ) {
+                    m_gazeTask = null;
+                }
+                return new CommandDataServerGazeDataResult();
+            }
         }
 
         public void TriggerEffectDisable(EVRControllerType controllerType) {

@@ -5,6 +5,7 @@ using VRCFaceTracking.Core.Library;
 using PSVR2Toolkit.CAPI;
 using System.Threading.Tasks;
 using VRCFT_Vector2 = VRCFaceTracking.Core.Types.Vector2;
+using Microsoft.Extensions.Logging;
 
 namespace PSVR2Toolkit.VRCFT {
     public unsafe class TrackingModule : ExtTrackingModule {
@@ -28,8 +29,10 @@ namespace PSVR2Toolkit.VRCFT {
             m_leftEyeOpenLowPass = new LowPassFilter(k_noiseFilterSamples);
             m_rightEyeOpenLowPass = new LowPassFilter(k_noiseFilterSamples);
 
+            IpcClient.Instance().SetLogger(Logger);
             if (IpcClient.Instance().Start()) {
                 m_eyeAvailable = eyeAvailable;
+                Logger.LogWarning("Failed to initialise PSVR2 Toolkit IPC Client. Eye tracking unavailable.");
             }
 
             return (m_eyeAvailable, false);
@@ -41,7 +44,7 @@ namespace PSVR2Toolkit.VRCFT {
 
         public override void Update() {
             if ( Status == ModuleState.Active ) {
-                var eyeTrackingData = Task.Run(() => IpcClient.Instance().RequestEyeTrackingData()).GetAwaiter().GetResult();
+                var eyeTrackingData = IpcClient.Instance().RequestEyeTrackingData();
 
                 if ( eyeTrackingData.leftEye.isBlinkValid ) {
                     float leftOpenness = eyeTrackingData.leftEye.blink ? 0 : 1;
