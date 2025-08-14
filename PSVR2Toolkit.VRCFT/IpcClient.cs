@@ -22,6 +22,8 @@ namespace PSVR2Toolkit.CAPI {
         private TaskCompletionSource<CommandDataServerGazeDataResult>? m_gazeTask;
         private CancellationTokenSource m_forceShutdownToken;
         private ILogger m_logger;
+        private int m_gazePumpPeriodMs = 8; // 120Hz
+        private CommandDataServerGazeDataResult? m_lastGazeState = null;
 
         public static IpcClient Instance() {
             if ( m_pInstance == null ) {
@@ -89,30 +91,49 @@ namespace PSVR2Toolkit.CAPI {
             byte[] buffer = new byte[1024];
 
             try {
+                var clientSocket = m_client!.Client;
+                m_stream!.ReadTimeout = 0; // make the underlying stream non-blocking
+
                 CommandDataClientRequestHandshake clientHandshakeRequest = new CommandDataClientRequestHandshake() {
                     ipcVersion = k_unIpcVersion,
                     processId = ( uint ) Process.GetCurrentProcess().Id
                 };
                 SendIpcCommand(ECommandType.ClientRequestHandshake, clientHandshakeRequest);
 
+                var sw = Stopwatch.StartNew();
+                long nextPumpMs = sw.ElapsedMilliseconds;
+
                 while ( m_running && !token.IsCancellationRequested ) {
-                    if ( !m_stream.CanRead )
-                        break;
-
-                    var readTask = m_stream.ReadAsync(buffer, 0, buffer.Length, token);
-                    int bytesRead = readTask.GetAwaiter().GetResult();
-
-                    if ( bytesRead <= 0 ) {
-                        m_logger.LogWarning("[IPC_CLIENT] Disconnected from server.");
-                        break;
+                    // query gaze state every so often
+                    var now = sw.ElapsedMilliseconds;
+                    if ( now >= nextPumpMs ) {
+                        SendIpcCommand(ECommandType.ClientRequestGazeData);
+                        nextPumpMs = now + m_gazePumpPeriodMs;
                     }
 
-                    if ( bytesRead < Marshal.SizeOf<CommandHeader>() ) {
-                        m_logger.LogWarning("[IPC_CLIENT] Received invalid command header size.");
+                    bool readable = clientSocket.Poll(1000 /* 1ms */, SelectMode.SelectRead);
+                    if ( readable && clientSocket.Available > 0 ) {
+                        int available = clientSocket.Available;
+                        if ( available > buffer.Length ) {
+                            buffer = new byte[Math.Max(available, buffer.Length * 2)];
+                        }
+
+                        int bytesRead = m_stream.Read(buffer, 0, Math.Min(buffer.Length, available));
+                        if ( bytesRead <= 0 ) {
+                            m_logger.LogWarning("[IPC_CLIENT] Disconnected from server.");
+                            break;
+                        }
+
+                        if ( bytesRead < Marshal.SizeOf<CommandHeader>() ) {
+                            m_logger.LogWarning("[IPC_CLIENT] Received invalid command header size.");
+                            continue;
+                        }
+
+                        HandleIpcCommand(buffer, bytesRead);
                         continue;
                     }
 
-                    HandleIpcCommand(buffer, bytesRead);
+                    Thread.Sleep(1);
                 }
             } catch ( OperationCanceledException ) {
                 // nothing special, this is from shutdown most likely
@@ -155,14 +176,7 @@ namespace PSVR2Toolkit.CAPI {
                 case ECommandType.ServerGazeDataResult: {
                         if ( header.dataLen == Marshal.SizeOf<CommandDataServerGazeDataResult>() ) {
                             CommandDataServerGazeDataResult response = ByteArrayToStructure<CommandDataServerGazeDataResult>(pBuffer, Marshal.SizeOf<CommandHeader>());
-                            lock ( m_gazeStateLock ) {
-                                if ( m_gazeTask != null ) {
-                                    m_gazeTask.SetResult(response);
-                                    m_gazeTask = null;
-                                } else {
-                                    m_logger.LogError("[IPC_CLIENT] Received unsolicited eye tracking data.");
-                                }
-                            }
+                            m_lastGazeState = response;
 
                         }
                         break;
@@ -235,32 +249,13 @@ namespace PSVR2Toolkit.CAPI {
             return structure;
         }
 
-        public CommandDataServerGazeDataResult RequestEyeTrackingData(int timeoutMs = 20) {
+        public CommandDataServerGazeDataResult RequestEyeTrackingData() {
 
             if ( !m_running ) {
                 return new CommandDataServerGazeDataResult();
             }
 
-            TaskCompletionSource<CommandDataServerGazeDataResult> gazeTask;
-
-            lock ( m_gazeStateLock ) {
-                m_gazeTask?.TrySetCanceled();
-                gazeTask = new TaskCompletionSource<CommandDataServerGazeDataResult>(
-                    TaskCreationOptions.RunContinuationsAsynchronously);
-                m_gazeTask = gazeTask;
-            }
-
-            SendIpcCommand(ECommandType.ClientRequestGazeData);
-
-            if ( gazeTask.Task.Wait(timeoutMs) ) {
-                return gazeTask.Task.Result;
-            } else {
-                m_logger.LogWarning("[IPC_CLIENT] Eye tracking request timed out.");
-                lock ( m_gazeStateLock ) {
-                    m_gazeTask = null;
-                }
-                return new CommandDataServerGazeDataResult();
-            }
+            return m_lastGazeState ?? new CommandDataServerGazeDataResult();
         }
 
         public void TriggerEffectDisable(EVRControllerType controllerType) {
