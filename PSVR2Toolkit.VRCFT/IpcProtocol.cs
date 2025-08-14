@@ -44,23 +44,28 @@ namespace PSVR2Toolkit.CAPI {
         public ushort ipcVersion; // The IPC version the server is using.
     };
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct GazeVector3 {
         public float x, y, z;
     };
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct GazeEyeResult {
+        [MarshalAs(UnmanagedType.I1)]
         public bool isGazeOriginValid;
         public GazeVector3 gazeOriginMm;
 
+        [MarshalAs(UnmanagedType.I1)]
         public bool isGazeDirValid;
         public GazeVector3 gazeDirNorm;
 
+        [MarshalAs(UnmanagedType.I1)]
         public bool isPupilDiaValid;
         public float pupilDiaMm;
 
+        [MarshalAs(UnmanagedType.I1)]
         public bool isBlinkValid;
+        [MarshalAs(UnmanagedType.I1)]
         public bool blink;
     };
 
@@ -127,6 +132,4 @@ namespace PSVR2Toolkit.CAPI {
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = 10)]
         public byte[] amplitude;
     };
-
-
 }
