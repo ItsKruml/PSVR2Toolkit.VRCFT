@@ -92,7 +92,7 @@ namespace PSVR2Toolkit.CAPI {
 
             try {
                 var clientSocket = m_client!.Client;
-                m_stream!.ReadTimeout = 0; // make the underlying stream non-blocking
+                m_stream!.ReadTimeout = 1; // make the underlying stream non-blocking
 
                 CommandDataClientRequestHandshake clientHandshakeRequest = new CommandDataClientRequestHandshake() {
                     ipcVersion = k_unIpcVersion,

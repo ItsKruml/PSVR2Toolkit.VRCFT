@@ -32,9 +32,13 @@ namespace PSVR2Toolkit.VRCFT {
             IpcClient.Instance().SetLogger(Logger);
             if (IpcClient.Instance().Start()) {
                 m_eyeAvailable = eyeAvailable;
-                Logger.LogWarning("Failed to initialise PSVR2 Toolkit IPC Client. Eye tracking unavailable.");
             }
-
+            else
+            {
+                Logger.LogWarning("Failed to initialise PSVR2 Toolkit IPC Client. Eye tracking unavailable.");
+                return (false, false);
+            }
+            
             return (m_eyeAvailable, false);
         }
 
