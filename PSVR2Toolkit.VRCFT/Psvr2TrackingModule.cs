@@ -8,7 +8,7 @@ using VRCFT_Vector2 = VRCFaceTracking.Core.Types.Vector2;
 using Microsoft.Extensions.Logging;
 
 namespace PSVR2Toolkit.VRCFT {
-    public unsafe class TrackingModule : ExtTrackingModule {
+    public unsafe class Psvr2TrackingModule : ExtTrackingModule {
 
         private bool m_eyeAvailable = false;
 
