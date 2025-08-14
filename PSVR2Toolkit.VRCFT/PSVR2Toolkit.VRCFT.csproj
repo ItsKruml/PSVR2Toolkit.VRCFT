@@ -21,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="7.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -34,7 +34,7 @@
   </ItemGroup>
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="copy /Y &quot;$(TargetDir)$(ProjectName).dll&quot; &quot;$(AppData)\VRCFaceTracking\CustomLibs\7beecf37-5f4d-4ecd-bbb1-1767e115e140\PSVR2Toolkit.VRCFT.dll&quot;&#xD;&#xA;if $(ConfigurationName) == Release (powershell.exe -Command Compress-Archive -Path '$(TargetDir)\$(ProjectName).dll', '$(SolutionDir)x64\Release\PSVR2ToolkitSDK.dll', '$(TargetDir)\module.json' -DestinationPath '$(TargetDir)\PSVR2Toolkit.VRCFT.zip' -Force)" />
+    <Exec Command="copy /Y &quot;$(TargetDir)$(ProjectName).dll&quot; &quot;$(AppData)\VRCFaceTracking\CustomLibs\7beecf37-5f4d-4ecd-bbb1-1767e115e140\PSVR2Toolkit.VRCFT.dll&quot;&#xD;&#xA;if $(ConfigurationName) == Release (powershell.exe -Command Compress-Archive -Path '$(TargetDir)\$(ProjectName).dll', '$(TargetDir)\module.json' -DestinationPath '$(TargetDir)\PSVR2Toolkit.VRCFT.zip' -Force)" />
   </Target>
 
 </Project>
