@@ -1,11 +1,12 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using PSVR2Toolkit.CAPI;
 using VRCFaceTracking;
 using VRCFaceTracking.Core.Library;
-using PSVR2Toolkit.CAPI;
-using System.Threading.Tasks;
 using VRCFT_Vector2 = VRCFaceTracking.Core.Types.Vector2;
-using Microsoft.Extensions.Logging;
 
 namespace PSVR2Toolkit.VRCFT {
     public unsafe class Psvr2TrackingModule : ExtTrackingModule {
@@ -47,6 +48,9 @@ namespace PSVR2Toolkit.VRCFT {
         }
 
         public override void Update() {
+            
+            Thread.Sleep(10);
+            
             if ( Status == ModuleState.Active ) {
                 var eyeTrackingData = IpcClient.Instance().RequestEyeTrackingData();
 
