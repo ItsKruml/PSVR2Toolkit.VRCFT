@@ -49,7 +49,7 @@ namespace PSVR2Toolkit.VRCFT {
 
         public override void Update() {
             
-            Thread.Sleep(10);
+            Thread.Sleep(5);
             
             if ( Status == ModuleState.Active ) {
                 var eyeTrackingData = IpcClient.Instance().RequestEyeTrackingData();
