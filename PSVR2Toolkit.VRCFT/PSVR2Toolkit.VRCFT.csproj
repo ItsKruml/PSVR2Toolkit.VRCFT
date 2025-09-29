@@ -34,7 +34,17 @@
   </ItemGroup>
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="copy /Y &quot;$(TargetDir)$(ProjectName).dll&quot; &quot;$(AppData)\VRCFaceTracking\CustomLibs\7beecf37-5f4d-4ecd-bbb1-1767e115e140\PSVR2Toolkit.VRCFT.dll&quot;&#xD;&#xA;if $(ConfigurationName) == Release (powershell.exe -Command Compress-Archive -Path '$(TargetDir)\$(ProjectName).dll', '$(TargetDir)\module.json' -DestinationPath '$(TargetDir)\PSVR2Toolkit.VRCFT.zip' -Force)" />
+    <!-- Ensure the Documents subfolder exists -->
+    <Exec Command="if not exist &quot;%USERPROFILE%\Documents\PSVR2Toolkit-FixCPU.VRCFT.DLL&quot; mkdir &quot;%USERPROFILE%\Documents\PSVR2Toolkit-FixCPU.VRCFT.DLL&quot;" />
+    <!-- Copy the newly built DLL and module.json to Documents subfolder -->
+    <Exec Command="copy /Y &quot;$(TargetDir)$(ProjectName).dll&quot; &quot;%USERPROFILE%\Documents\PSVR2Toolkit-FixCPU.VRCFT.DLL\PSVR2Toolkit.VRCFT.dll&quot;" />
+    <Exec Command="copy /Y &quot;$(TargetDir)module.json&quot; &quot;%USERPROFILE%\Documents\PSVR2Toolkit-FixCPU.VRCFT.DLL\module.json&quot;" />
+    <!-- Create the zip from the Documents subfolder -->
+    <Exec Command="powershell.exe -Command Compress-Archive -Path '%USERPROFILE%\Documents\PSVR2Toolkit-FixCPU.VRCFT.DLL\*' -DestinationPath '%USERPROFILE%\Documents\PSVR2Toolkit-FixCPU.VRCFT.DLL.zip' -Force" />
+  </Target>
+
+  <Target Name="PostBuildRelease" AfterTargets="PostBuildEvent" Condition="'$(Configuration)' == 'Release'">
+    <Exec Command="powershell.exe -Command Compress-Archive -Path '$(TargetDir)\$(ProjectName).dll', '$(TargetDir)\module.json' -DestinationPath '$(TargetDir)\PSVR2Toolkit.VRCFT.zip' -Force" />
   </Target>
 
 </Project>
